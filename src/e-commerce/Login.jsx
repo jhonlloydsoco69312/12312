@@ -1,66 +1,51 @@
 import { useState } from "react";
-import { supabase } from '../supabase';
+import { supabase } from "../supabase";
 
 export default function Login({ onClose, onSwitchToRegister, onLoginSuccess }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
   const handleSubmit = async (e) => {
-    e.preventDefault();
+    if (e) e.preventDefault();
+    setError("");
 
     if (!email || !password) {
-      alert("Please fill in all fields");
+      setError("Please fill in all fields");
       return;
     }
 
     setLoading(true);
 
     try {
-      // Sign in with Supabase
-      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-        email,
-        password
-      });
-
-      if (authError) throw authError;
-
-      // Get user profile from profiles table
-      const { data: profileData, error: profileError } = await supabase
-        .from('profiles')
+      // Query user by email and password
+      const { data, error } = await supabase
+        .from('users')
         .select('*')
-        .eq('id', authData.user.id)
+        .eq('email', email)
+        .eq('password', password)
         .single();
 
-      if (profileError) {
-        console.error("Profile fetch error:", profileError);
-        // If profile doesn't exist, create one with default role
-        const { error: insertError } = await supabase
-          .from('profiles')
-          .insert([{
-            id: authData.user.id,
-            email: email,
-            role: 'user'
-          }]);
-
-        if (insertError) console.error("Profile creation error:", insertError);
-
-        onLoginSuccess({ 
-          user: email, 
-          role: 'user',
-          userId: authData.user.id 
-        });
-      } else {
-        onLoginSuccess({ 
-          user: email, 
-          role: profileData.role || 'user',
-          userId: authData.user.id
-        });
+      if (error || !data) {
+        setError("Invalid email or password");
+        setLoading(false);
+        return;
       }
+
+      // Login successful
+      onLoginSuccess({ 
+        user: data.email, 
+        role: data.role,
+        userId: data.id,
+        name: data.name,
+        email: data.email
+      });
+      
+      onClose();
     } catch (error) {
       console.error("Login error:", error);
-      alert(error.message || "Login failed. Please check your credentials.");
-    } finally {
+      setError("An error occurred. Please try again.");
       setLoading(false);
     }
   };
@@ -89,12 +74,19 @@ export default function Login({ onClose, onSwitchToRegister, onLoginSuccess }) {
         {/* RIGHT SIDE LOGIN FORM */}
         <div className="w-full md:w-1/2 flex flex-col items-center justify-center bg-gradient-to-tl from-orange-600 via-orange-400 to-amber-300 px-10 py-10">
 
-          <form onSubmit={handleSubmit} className="w-full max-w-sm space-y-6">
+          <div className="w-full max-w-sm space-y-6">
 
             {/* LOGIN TITLE */}
             <h2 className="text-3xl font-bold text-black text-center mb-4">
               Login
             </h2>
+
+            {/* Error message */}
+            {error && (
+              <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
+                {error}
+              </div>
+            )}
 
             {/* EMAIL INPUT */}
             <div className="space-y-2">
@@ -107,6 +99,7 @@ export default function Login({ onClose, onSwitchToRegister, onLoginSuccess }) {
                   placeholder="Enter your email"
                   className="w-full bg-white rounded-full px-4 py-3 pr-12 outline-none text-sm text-gray-800 shadow-md"
                   disabled={loading}
+                  onKeyPress={(e) => e.key === 'Enter' && handleSubmit()}
                 />
                 <img
                   src="/icons/user.png"
@@ -127,6 +120,7 @@ export default function Login({ onClose, onSwitchToRegister, onLoginSuccess }) {
                   placeholder="Enter your password"
                   className="w-full bg-white rounded-full px-4 py-3 pr-12 outline-none text-sm text-gray-800 shadow-md"
                   disabled={loading}
+                  onKeyPress={(e) => e.key === 'Enter' && handleSubmit()}
                 />
                 <img
                   src="/icons/lock.png"
@@ -138,7 +132,7 @@ export default function Login({ onClose, onSwitchToRegister, onLoginSuccess }) {
 
             {/* LOGIN BUTTON */}
             <button
-              type="submit"
+              onClick={handleSubmit}
               disabled={loading}
               className="w-full bg-orange-600 hover:bg-orange-500 text-white font-semibold py-3 rounded-full shadow-xl transition-all duration-300 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
             >
@@ -152,6 +146,12 @@ export default function Login({ onClose, onSwitchToRegister, onLoginSuccess }) {
               <div className="flex-1 h-px bg-white/40"></div>
             </div>
 
+            {/* Test credentials hint */}
+            <div className="bg-white/20 rounded-lg p-3 text-xs text-white">
+              <p className="font-semibold mb-1">Test Credentials:</p>
+              <p>Admin: admin@teecraft.com / admin123</p>
+            </div>
+
             {/* SIGNUP LINK */}
             <p className="text-xs text-white/90 text-center pt-2">
               Don't have an account?{" "}
@@ -159,13 +159,12 @@ export default function Login({ onClose, onSwitchToRegister, onLoginSuccess }) {
                 type="button"
                 onClick={onSwitchToRegister}
                 className="font-semibold underline text-white"
-                disabled={loading}
               >
                 Sign Up
               </button>
             </p>
 
-          </form>
+          </div>
 
         </div>
       </div>

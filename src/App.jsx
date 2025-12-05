@@ -22,9 +22,11 @@ function App() {
     checkSession();
 
     // Listen for auth state changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      console.log("Auth state changed:", _event, session);
+      
       if (session) {
-        loadUserProfile(session.user.id);
+        await loadUserProfile(session.user.id);
       } else {
         setCurrentUser(null);
         setCurrentRole(null);
@@ -38,51 +40,109 @@ function App() {
 
   const checkSession = async () => {
     try {
-      const { data: { session } } = await supabase.auth.getSession();
+      const { data: { session }, error } = await supabase.auth.getSession();
+      
+      if (error) {
+        console.error("Session check error:", error);
+        setLoading(false);
+        return;
+      }
       
       if (session) {
         await loadUserProfile(session.user.id);
+      } else {
+        setLoading(false);
       }
     } catch (error) {
       console.error("Session check error:", error);
-    } finally {
       setLoading(false);
     }
   };
 
   const loadUserProfile = async (userId) => {
     try {
-      const { data: profileData, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', userId)
-        .single();
+      // Add retry logic for profile fetch
+      let attempts = 0;
+      let profileData = null;
+      let error = null;
 
-      if (error) throw error;
+      while (attempts < 3 && !profileData) {
+        const result = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', userId)
+          .single();
 
-      const role = profileData?.role || 'user';
-      const email = profileData?.email || '';
+        profileData = result.data;
+        error = result.error;
 
-      setCurrentUser(email);
-      setCurrentRole(role);
-      setIsAuthenticated(true);
+        if (error && attempts < 2) {
+          console.log(`Profile fetch attempt ${attempts + 1} failed, retrying...`);
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          attempts++;
+        } else {
+          break;
+        }
+      }
 
-      localStorage.setItem(
-        "auth",
-        JSON.stringify({
-          user: email,
-          role: role,
-          isAuthenticated: true,
-          userId: userId
-        })
-      );
+      if (error) {
+        console.error("Profile load error after retries:", error);
+        // If profile doesn't exist, create it
+        const { data: { user } } = await supabase.auth.getUser();
+        
+        if (user) {
+          const { error: insertError } = await supabase
+            .from('profiles')
+            .insert([{
+              id: user.id,
+              email: user.email,
+              full_name: user.user_metadata?.full_name || 'User',
+              role: 'user'
+            }]);
+
+          if (insertError && insertError.code !== '23505') {
+            console.error("Profile creation error:", insertError);
+          } else {
+            // Try fetching again
+            const { data: newProfile } = await supabase
+              .from('profiles')
+              .select('*')
+              .eq('id', userId)
+              .single();
+            
+            profileData = newProfile;
+          }
+        }
+      }
+
+      if (profileData) {
+        const role = profileData.role || 'user';
+        const email = profileData.email || '';
+
+        setCurrentUser(email);
+        setCurrentRole(role);
+        setIsAuthenticated(true);
+
+        localStorage.setItem(
+          "auth",
+          JSON.stringify({
+            user: email,
+            role: role,
+            isAuthenticated: true,
+            userId: userId
+          })
+        );
+      }
     } catch (error) {
       console.error("Profile load error:", error);
+    } finally {
       setLoading(false);
     }
   };
 
   const handleLoginSuccess = async ({ user, role, userId }) => {
+    console.log("Login success:", { user, role, userId });
+    
     setCurrentUser(user);
     setCurrentRole(role);
     setIsAuthenticated(true);
@@ -97,6 +157,9 @@ function App() {
       })
     );
 
+    // Small delay to ensure state is set
+    await new Promise(resolve => setTimeout(resolve, 100));
+
     // Redirect after login
     if (role === "admin") {
       navigate("/admin", { replace: true });
@@ -110,26 +173,33 @@ function App() {
     if (loading) {
       return (
         <div className="min-h-screen bg-gray-100 flex items-center justify-center">
-          <div className="text-gray-600">Loading...</div>
+          <div className="animate-pulse">
+            <div className="text-gray-600 text-lg">Loading...</div>
+          </div>
         </div>
       );
     }
 
-    if (isAuthenticated) {
-      // If role mismatch
-      if (requiredRole && currentRole !== requiredRole) {
-        return <Navigate to="/dashboard" replace />;
-      }
-      return element;
+    if (!isAuthenticated) {
+      console.log("Not authenticated, redirecting to landing");
+      return <Navigate to="/" replace />;
     }
 
-    return <Navigate to="/" replace />;
+    // If role mismatch
+    if (requiredRole && currentRole !== requiredRole) {
+      console.log(`Role mismatch: required ${requiredRole}, current ${currentRole}`);
+      return <Navigate to="/dashboard" replace />;
+    }
+
+    return element;
   };
 
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-100 flex items-center justify-center">
-        <div className="text-gray-600">Loading...</div>
+        <div className="animate-pulse">
+          <div className="text-gray-600 text-lg">Loading...</div>
+        </div>
       </div>
     );
   }
@@ -139,19 +209,37 @@ function App() {
       {/* Landing Page */}
       <Route
         path="/"
-        element={<Landing onLoginSuccess={handleLoginSuccess} />}
+        element={
+          isAuthenticated ? (
+            <Navigate to={currentRole === "admin" ? "/admin" : "/dashboard"} replace />
+          ) : (
+            <Landing onLoginSuccess={handleLoginSuccess} />
+          )
+        }
       />
 
       {/* Login */}
       <Route
         path="/login"
-        element={<Login onLoginSuccess={handleLoginSuccess} />}
+        element={
+          isAuthenticated ? (
+            <Navigate to={currentRole === "admin" ? "/admin" : "/dashboard"} replace />
+          ) : (
+            <Login onLoginSuccess={handleLoginSuccess} />
+          )
+        }
       />
 
       {/* Signup */}
       <Route
         path="/signup"
-        element={<Signup onLoginSuccess={handleLoginSuccess} />}
+        element={
+          isAuthenticated ? (
+            <Navigate to={currentRole === "admin" ? "/admin" : "/dashboard"} replace />
+          ) : (
+            <Signup onLoginSuccess={handleLoginSuccess} />
+          )
+        }
       />
 
       {/* Dashboard (Authenticated: ANY ROLE) */}
