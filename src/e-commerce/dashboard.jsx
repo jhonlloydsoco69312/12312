@@ -231,29 +231,14 @@ export default function Dashboard() {
     <div className="min-h-screen bg-gray-100">
       {/* Header */}
       <header className="bg-orange-500 px-6 py-3 flex items-center justify-between">
-        <h1 className="text-white text-2xl font-bold min-w-[120px]">Tee-Shirt</h1>
+        <h1 className="text-white text-2xl font-bold">Tee-Shirt</h1>
 
-        <div className="flex-1 max-w-xl mx-8">
-          <div className="relative">
-            <input
-              type="text"
-              placeholder="Search ..."
-              className="w-full bg-white rounded-full px-5 py-2 pr-10 outline-none text-sm"
-            />
-            <img
-              src="/icons/search.png"
-              alt="Search"
-              className="w-5 h-5 absolute right-4 top-1/2 -translate-y-1/2 opacity-40"
-            />
-          </div>
-        </div>
-
-        <div className="flex items-center gap-5 min-w-[80px] justify-end">
+        <div className="flex items-center gap-5">
           <button 
             onClick={() => navigate('/cart')}
             className="hover:opacity-80 transition relative"
           >
-            <img src="/icons/cart.png" alt="Cart" className="w-6 h-6" />
+            <img src="/icons/cart.png" alt="Cart" className="w-6 h-6 invert brightness-0" />
             {cartCount > 0 && (
               <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs w-5 h-5 rounded-full flex items-center justify-center font-bold">
                 {cartCount}
@@ -264,7 +249,7 @@ export default function Dashboard() {
             onClick={() => navigate('/profile')}
             className="hover:opacity-80 transition"
           >
-            <img src="/icons/acc.png" alt="User" className="w-6 h-6" />
+            <img src="/icons/acc.png" alt="User" className="w-6 h-6 invert brightness-0" />
           </button>
         </div>
       </header>

@@ -6,7 +6,7 @@ import Landing from "./Landing/LandingPage.jsx";
 import Login from "./e-commerce/Login.jsx";
 import Signup from "./e-commerce/Signup.jsx";
 import Dashboard from "./e-commerce/dashboard.jsx";
-import Profile from "./e-commerce/Profile.jsx";
+import Profile from "./e-commerce/profile.jsx";
 import Cart from "./e-commerce/cart.jsx";
 import Admin from "./admin/admin.jsx";
 

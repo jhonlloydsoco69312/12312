@@ -102,8 +102,8 @@ export default function Login({ onClose, onSwitchToRegister, onLoginSuccess }) {
                   onKeyPress={(e) => e.key === 'Enter' && handleSubmit()}
                 />
                 <img
-                  src="/icons/user.png"
-                  className="absolute right-3 top-1/2 -translate-y-1/2 w-7 h-7 bg-black rounded-full p-1.5"
+                  src="/icons/acc.png"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 w-7 h-7  rounded-full p-1.5"
                   alt=""
                 />
               </div>
@@ -123,8 +123,8 @@ export default function Login({ onClose, onSwitchToRegister, onLoginSuccess }) {
                   onKeyPress={(e) => e.key === 'Enter' && handleSubmit()}
                 />
                 <img
-                  src="/icons/lock.png"
-                  className="absolute right-3 top-1/2 -translate-y-1/2 w-7 h-7 bg-black rounded-full p-1.5"
+                  src="/icons/pass.png"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 w-7 h-7  rounded-full p-1.5"
                   alt=""
                 />
               </div>
@@ -149,7 +149,7 @@ export default function Login({ onClose, onSwitchToRegister, onLoginSuccess }) {
             {/* Test credentials hint */}
             <div className="bg-white/20 rounded-lg p-3 text-xs text-white">
               <p className="font-semibold mb-1">Test Credentials:</p>
-              <p>Admin: admin@teecraft.com / admin123</p>
+              <p>Admin: admin@gmail.com / admin123</p>
             </div>
 
             {/* SIGNUP LINK */}

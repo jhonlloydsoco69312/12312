@@ -21,50 +21,54 @@ export default function Admin() {
     try {
       setLoading(true);
       
-      // Get current session
-      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      // Get user from localStorage (since we're using custom auth)
+      const stored = localStorage.getItem("auth");
+      console.log("Stored auth:", stored);
       
-      console.log("Admin check - Session:", session);
-      
-      if (sessionError) {
-        console.error("Session error:", sessionError);
+      if (!stored) {
+        console.log("No stored auth, redirecting to home");
         navigate("/");
         return;
       }
 
-      if (!session) {
-        console.log("No session found, redirecting to home");
-        navigate("/");
+      const authData = JSON.parse(stored);
+      console.log("Auth data:", authData);
+
+      // Check if user has admin role
+      if (authData.role !== "admin") {
+        console.log("User is not admin, role:", authData.role);
+        alert("Access Denied: Admin privileges required");
+        navigate("/dashboard");
         return;
       }
 
-      // Get user profile
-      const { data: profileData, error: profileError } = await supabase
-        .from("profiles")
+      // Get full user profile
+      const { data: userData, error: userError } = await supabase
+        .from("users")
         .select("*")
-        .eq("id", session.user.id)
+        .eq("id", authData.userId)
         .single();
 
-      console.log("Admin check - Profile data:", profileData);
-      console.log("Admin check - Profile error:", profileError);
+      console.log("User data:", userData);
+      console.log("User error:", userError);
 
-      if (profileError) {
-        console.error("Error fetching profile:", profileError);
+      if (userError || !userData) {
+        console.error("Error fetching user:", userError);
         alert("Error loading profile. Please try logging in again.");
         navigate("/");
         return;
       }
 
-      // CRITICAL: Check if user has admin role
-      if (!profileData || profileData.role !== "admin") {
-        console.log("User role:", profileData?.role, "- Access denied");
+      // Verify admin role from database
+      if (userData.role !== "admin") {
+        console.log("Database role is not admin:", userData.role);
         alert("Access Denied: Admin privileges required");
         navigate("/dashboard");
         return;
       }
 
       console.log("Admin access granted");
-      setProfile(profileData);
+      setProfile(userData);
       
       // Load admin data
       await Promise.all([fetchUsers(), fetchOrders()]);
@@ -84,7 +88,11 @@ export default function Admin() {
         .select("*")
         .order("created_at", { ascending: false });
 
-      if (error) throw error;
+      if (error) {
+        console.error("Error fetching users:", error);
+        return;
+      }
+      
       console.log("Fetched users:", data);
       setUsers(data || []);
     } catch (error) {
@@ -112,14 +120,17 @@ export default function Admin() {
         `)
         .order("created_at", { ascending: false });
 
-      if (error) throw error;
+      if (error) {
+        console.error("Error fetching orders:", error);
+        return;
+      }
 
-      const formattedOrders = data.map(order => ({
+      const formattedOrders = (data || []).map(order => ({
         id: order.id,
         customerEmail: order.profiles?.email || "Unknown",
         customerName: order.profiles?.full_name || "Unknown",
         items: order.order_items?.length || 0,
-        total: parseFloat(order.total),
+        total: parseFloat(order.total || 0),
         status: order.status,
         date: new Date(order.created_at).toLocaleDateString(),
         createdAt: order.created_at
@@ -172,8 +183,6 @@ export default function Admin() {
     if (!confirm("Are you sure you want to logout?")) return;
     
     try {
-      const { error } = await supabase.auth.signOut();
-      if (error) throw error;
       localStorage.removeItem("auth");
       navigate("/", { replace: true });
     } catch (error) {
@@ -228,7 +237,7 @@ export default function Admin() {
 
         <div className="flex items-center gap-4">
           <div className="text-right mr-2">
-            <p className="text-white text-sm font-medium">{profile?.full_name || "Admin"}</p>
+            <p className="text-white text-sm font-medium">{profile?.name || "Admin"}</p>
             <p className="text-orange-100 text-xs">{profile?.email}</p>
           </div>
           
@@ -365,8 +374,9 @@ export default function Admin() {
                   {orders.slice(0, 5).map((order) => (
                     <div key={order.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                       <div>
-                        <p className="font-medium text-gray-900">{order.customerName || order.customerEmail}</p>
-                        <p className="text-sm text-gray-500">{order.date}</p>
+                        <p className="font-medium text-gray-900">{order.customerName}</p>
+                        <p className="text-sm text-gray-500">{order.customerEmail}</p>
+                        <p className="text-xs text-gray-400">{order.date}</p>
                       </div>
                       <div className="text-right">
                         <p className="font-semibold text-gray-900">₱ {order.total.toLocaleString()}</p>
@@ -478,6 +488,7 @@ export default function Admin() {
                   <table className="w-full">
                     <thead className="bg-gray-50">
                       <tr>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Order ID</th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Customer</th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Items</th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Total</th>
@@ -489,6 +500,9 @@ export default function Admin() {
                     <tbody className="divide-y divide-gray-200">
                       {filteredOrders.map((order) => (
                         <tr key={order.id} className="hover:bg-gray-50">
+                          <td className="px-6 py-4 text-sm text-gray-900 font-mono">
+                            #{order.id.slice(0, 8)}
+                          </td>
                           <td className="px-6 py-4">
                             <div>
                               <p className="font-medium text-gray-900">{order.customerName}</p>
@@ -537,7 +551,10 @@ export default function Admin() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
           <div className="bg-white rounded-2xl shadow-2xl w-[90%] max-w-3xl max-h-[80vh] overflow-hidden">
             <div className="bg-orange-500 px-6 py-4 flex items-center justify-between">
-              <h3 className="text-white text-xl font-bold">{selectedUser.full_name || selectedUser.email}'s Orders</h3>
+              <div>
+                <h3 className="text-white text-xl font-bold">{selectedUser.full_name || selectedUser.email}'s Orders</h3>
+                <p className="text-orange-100 text-sm">{selectedUser.email}</p>
+              </div>
               <button
                 onClick={() => setSelectedUser(null)}
                 className="text-white hover:text-orange-100"
@@ -554,25 +571,24 @@ export default function Admin() {
               ) : (
                 <div className="space-y-4">
                   {getUserOrders(selectedUser.email).map((order) => (
-                    <div key={order.id} className="border rounded-lg p-4">
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="font-semibold text-gray-900">Order #{order.id.slice(0, 8)}</span>
+                    <div key={order.id} className="border rounded-lg p-4 hover:shadow-md transition">
+                      <div className="flex items-center justify-between mb-3">
+                        <div>
+                          <span className="font-semibold text-gray-900">Order #{order.id.slice(0, 8)}</span>
+                          <p className="text-sm text-gray-500 mt-1">{order.date}</p>
+                        </div>
                         <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(order.status)}`}>
                           {order.status}
                         </span>
                       </div>
-                      <div className="grid grid-cols-3 gap-4 text-sm">
+                      <div className="grid grid-cols-2 gap-4 text-sm pt-3 border-t">
                         <div>
                           <p className="text-gray-500">Items</p>
-                          <p className="font-medium">{order.items}</p>
+                          <p className="font-medium">{order.items} item{order.items !== 1 ? 's' : ''}</p>
                         </div>
-                        <div>
+                        <div className="text-right">
                           <p className="text-gray-500">Total</p>
-                          <p className="font-medium text-orange-600">₱ {order.total.toLocaleString()}</p>
-                        </div>
-                        <div>
-                          <p className="text-gray-500">Date</p>
-                          <p className="font-medium">{order.date}</p>
+                          <p className="font-bold text-orange-600 text-lg">₱ {order.total.toLocaleString()}</p>
                         </div>
                       </div>
                     </div>
